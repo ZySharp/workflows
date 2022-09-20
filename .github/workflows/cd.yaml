@@ -1,0 +1,120 @@
+name: CD
+
+on: 
+  workflow_call:
+    secrets:
+      NUGET_API_KEY:
+        required: true
+
+env:
+  BUILD_CONFIG: Release
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.1.0
+        with:
+          # Required by NBGV
+          fetch-depth: 0
+
+      - name: .NET Setup
+        uses: flobernd/actions/dotnet/setup@master
+        with:
+          # Use version defined in 'global.json'
+          dotnet-version: ''
+          disable-problem-matcher: true
+
+      - name: Detect Version
+        uses: dotnet/nbgv@master
+        id: nbgv
+
+      - name: Create Release
+        uses: flobernd/actions/github/create-release@master
+        with:
+          tag-name: v${{ steps.nbgv.outputs.SimpleVersion }}
+          target-commitish: ${{ github.sha }}
+          generate-release-notes: true
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.1.0
+        with:
+          # Required by NBGV
+          fetch-depth: 0
+
+      - name: Find Solution
+        id: find
+        uses: flobernd/actions/dotnet/find-solution@master
+
+      - uses: flobernd/actions/dotnet/filter-solution@master
+        name: Filter Solution
+        with:
+          solution: ${{ steps.find.outputs.solution }}
+          pattern: |
+            **/*.csproj
+            !**/*.Test*.csproj
+            !**/*.Examples*.csproj
+          output: ./Packages.slnf
+
+      - name: .NET Setup
+        uses: flobernd/actions/dotnet/setup@master
+        with:
+          # Use version defined in 'global.json'
+          dotnet-version: ''
+          disable-problem-matcher: false
+
+      - name: .NET Restore
+        uses: flobernd/actions/dotnet/restore@master
+        with:
+          workspace: ./Packages.slnf
+          cache-key: ${{ hashFiles('**/packages.lock.json') }}
+
+      - name: .NET Pack
+        uses: flobernd/actions/dotnet/pack@master
+        with:
+          workspace: ./Packages.slnf
+          configuration: ${{ env.BUILD_CONFIG }}
+          output: ./nupkg
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3.1.1
+        with:
+          name: packages
+          path: ./nupkg
+
+  publish:
+    name: Publish to ${{ matrix.feed.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feed:
+          - { name: 'GitHub', source: 'https://nuget.pkg.github.com/zysharp/index.json', key: 'GITHUB_TOKEN'  }
+          - { name: 'NuGet' , source: 'https://api.nuget.org/v3/index.json'            , key: 'NUGET_API_KEY' }
+    needs: build
+    steps:
+      - name: .NET Setup
+        uses: flobernd/actions/dotnet/setup@master
+        with:
+          # Use version defined in 'global.json'
+          dotnet-version: ''
+          disable-problem-matcher: true
+
+      - name: Download Packages
+        uses: actions/download-artifact@v3.0.1
+        with:
+          name: packages
+          path: ./nupkg
+
+      - name: .NET NuGet Push
+        uses: flobernd/actions/dotnet/nuget-push@master
+        with:
+          packages: ./nupkg/*.nupkg
+          nuget-source: ${{ matrix.feed.source }}
+          nuget-api-key: ${{ secrets[matrix.feed.key] }}
