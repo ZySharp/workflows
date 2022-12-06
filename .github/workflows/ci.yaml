@@ -22,7 +22,7 @@ jobs:
 
       - name: Get Changed Files
         id: changed-files
-        uses: tj-actions/changed-files@932dad31974f07bd23cab5870d45c6e5ad5c8b73
+        uses: tj-actions/changed-files@baaf598b46c2d9eb97eb995c9f69d1967349155d
       
       - name: Find Solution
         id: find
