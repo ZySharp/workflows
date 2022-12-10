@@ -10,7 +10,6 @@
     <Description>ZySharp Workflows test package.</Description>
     <Company />
     <Copyright />
-    <PackageIcon>logo.png</PackageIcon>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/zysharp/workflows</PackageProjectUrl>
@@ -39,7 +38,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\Assets\logo.png" Pack="true" PackagePath="" Visible="false" />
     <None Include="..\LICENSE" Pack="true" PackagePath="" Visible="false" />
     <None Include="..\README.md" Pack="true" PackagePath="" Visible="false" />
   </ItemGroup>
