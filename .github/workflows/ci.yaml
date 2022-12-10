@@ -2,6 +2,14 @@ name: CI
 
 on:
   workflow_call:
+    inputs:
+      directory:
+        description: >
+          The directory in which a Visual Studio Solution file is to be searched for.
+          Do not add a trailing slash.
+        type: string
+        required: false
+        default: ''
     secrets:
       SONAR_TOKEN:
         required: true
@@ -23,10 +31,13 @@ jobs:
       - name: Get Changed Files
         id: changed-files
         uses: tj-actions/changed-files@932dad31974f07bd23cab5870d45c6e5ad5c8b73
+        # TODO: This step should honor the directory input
       
       - name: Find Solution
         id: find
         uses: flobernd/actions/dotnet/find-solution@master
+        with:
+          directory: ${{ inputs.directory }}
 
       - name: .NET Setup
         uses: flobernd/actions/dotnet/setup@master
@@ -63,6 +74,8 @@ jobs:
       - name: Find Solution
         id: find
         uses: flobernd/actions/dotnet/find-solution@master
+        with:
+          directory: ${{ inputs.directory }}
 
       - name: Filter Solution
         uses: flobernd/actions/dotnet/filter-solution@master
@@ -71,6 +84,7 @@ jobs:
           pattern: |
             **/*.Test*.csproj
           output: ./Tests.slnf
+        # TODO: This step should honor the directory input for outputting the Solution Filter
 
       - name: .NET Setup
         uses: flobernd/actions/dotnet/setup@master
@@ -84,6 +98,7 @@ jobs:
         with:
           workspace: ./Tests.slnf
           cache-key: ${{ hashFiles('**/packages.lock.json') }}
+        # TODO: This step should honor the directory input for hashing
 
       - name: .NET Build
         uses: flobernd/actions/dotnet/build@master
@@ -99,6 +114,7 @@ jobs:
           log-results: true
           collect-coverage: false
           maxdop: 4
+        # TODO: This step should honor the directory input for test discovery
 
       - name: Generate Test Report
         uses: zyactions/test-reporter@main
@@ -123,6 +139,8 @@ jobs:
       - name: Find Solution
         id: find
         uses: flobernd/actions/dotnet/find-solution@master
+        with:
+          directory: ${{ inputs.directory }}
 
       - name: .NET Setup
         uses: flobernd/actions/dotnet/setup@master
@@ -136,6 +154,7 @@ jobs:
         with:
           workspace: ${{ steps.find.outputs.solution }}
           cache-key: ${{ hashFiles('**/packages.lock.json') }}
+        # TODO: This step should honor the directory input for hashing
 
       - name: SonarCloud Names
         id: sonarcloud-names
@@ -170,6 +189,7 @@ jobs:
           log-results: true
           collect-coverage: true
           maxdop: 4
+        # TODO: This step should honor the directory input for test discovery
 
       - name: SonarCloud End
         uses: flobernd/actions/sonarcloud/end@master
