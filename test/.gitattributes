@@ -1,6 +1,7 @@
 ### Header #########################################################################################
 
 # Author: Florian Bernd
+# Source: https://github.com/zysharp/templates
 
 ### Git Line Endings ###############################################################################
 
@@ -15,8 +16,8 @@
 *.json     text
 *.toml     text
 *.xml      text
-*.yml      text linguist-language=YAML linguist-detectable -linguist-vendored
-*.yaml     text linguist-language=YAML linguist-detectable -linguist-vendored
+*.yaml     text
+*.yml      text
 
 # Graphics
 *.eps      binary
@@ -42,9 +43,13 @@
 # Text files where line endings should be preserved
 *.patch    -text
 
-### Linguist exclusions ############################################################################
+### C# #############################################################################################
 
-test/*     linguist-vendored
+*.cs       text diff=csharp
+*.cshtml   text diff=html
+*.csproj   text
+*.csx      text diff=csharp
+*.sln      text
 
 ### Exclude files from exporting ###################################################################
 
