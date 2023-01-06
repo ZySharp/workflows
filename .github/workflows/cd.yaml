@@ -107,7 +107,7 @@ jobs:
           disable-problem-matcher: true
 
       - name: Download Packages
-        uses: actions/download-artifact@v3.0.1
+        uses: actions/download-artifact@v3.0.2
         with:
           name: packages
           path: ./nupkg
