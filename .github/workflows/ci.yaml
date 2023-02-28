@@ -30,7 +30,7 @@ jobs:
 
       - name: Get Changed Files
         id: changed-files
-        uses: tj-actions/changed-files@932dad31974f07bd23cab5870d45c6e5ad5c8b73
+        uses: tj-actions/changed-files@3ee6abf6107ccc2d8ee538de7ff6b1fb644f5d60
         # TODO: This step should honor the directory input
       
       - name: Find Solution
