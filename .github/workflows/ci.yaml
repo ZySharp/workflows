@@ -17,6 +17,10 @@ on:
 env:
   BUILD_CONFIG: Debug
 
+  # Workaround for https://github.com/dotnet/format/issues/1805 which affects the lint action
+  DOTNET_INSTALL_DIR: .temp/dotnet
+  DOTNET_ROOT: .temp/dotnet
+
 jobs:
   lint:
     name: Lint
