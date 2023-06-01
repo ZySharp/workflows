@@ -3,10 +3,8 @@ name: CI
 on:
   workflow_call:
     inputs:
-      directory:
-        description: >
-          The directory in which a Visual Studio Solution file is to be searched for.
-          Do not add a trailing slash.
+      path:
+        description: The path where to look for a Visual Studio Solution file (without a trailing slash).
         type: string
         required: false
         default: ''
@@ -16,57 +14,73 @@ on:
 
 env:
   BUILD_CONFIG: Debug
+  DOTNET_GLOBAL_JSON: ${{ inputs.path != '' && format('{0}/global.json', inputs.path) || 'global.json' }}
+  RESTORE_PATTERN: ${{ inputs.path != '' && format('{0}/**/packages.lock.json', inputs.path) || '**/packages.lock.json' }}
+  TESTS_PATTERN: ${{ inputs.path != '' && format('{0}/**/*.Test*.csproj', inputs.path) || '**/*.Test*.csproj' }}
 
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
+      - name: .NET Setup (SDK 8)
+        uses: zyactions/dotnet-setup@v1
+        with:
+          dotnet-version: '8.x.x'
+
+      - name: Install latest .NET Format tool
+        shell: bash
+        run: |
+          dotnet tool install -g dotnet-format --version "8.*" --add-source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet8/nuget/v3/index.json
+
       - name: Checkout
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v3
         with:
           # Retrieve the preceding commit to enable 'changed-files' to create a diff.
           fetch-depth: 2
 
       - name: Get Changed Files
         id: changed-files
-        uses: tj-actions/changed-files@932dad31974f07bd23cab5870d45c6e5ad5c8b73
-        # TODO: This step should honor the directory input
-      
-      - name: Find Solution
-        id: find
-        uses: flobernd/actions/dotnet/find-solution@master
+        uses: tj-actions/changed-files@f569b77fb1d9ad9f1a125757d7e9e07b1f320199
         with:
-          directory: ${{ inputs.directory }}
+          files: ${{ inputs.path != '' && format('{0}/**', inputs.path) || '' }}
 
       - name: .NET Setup
-        uses: flobernd/actions/dotnet/setup@master
+        uses: zyactions/dotnet-setup@v1
         with:
-          # Use version defined in 'global.json'
-          dotnet-version: ''
-          disable-problem-matcher: true
+          global-json-file: ${{ env.DOTNET_GLOBAL_JSON }}
+          problem-matcher: false
+
+      - name: .NET Cache Packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles(env.RESTORE_PATTERN) }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: .NET Restore
-        uses: flobernd/actions/dotnet/restore@master
+        uses: zyactions/dotnet-restore@v1
         with:
-          workspace: ${{ steps.find.outputs.solution }}
-          cache-key: ${{ hashFiles('**/packages.lock.json') }}
+          working-directory: ${{ inputs.path }}
 
       # TODO: Add additional generic '.editorconfig' linting, e.g. for `*.csproj` files
 
       - name: .NET Lint
-        uses: flobernd/actions/dotnet/lint@master
+        uses: zyactions/dotnet-lint@v1
         with:
-          workspace: ${{ steps.find.outputs.solution }}
+          working-directory: ${{ inputs.path }}
           # This list is empty for the initial commit. NET Lint will lint all files in this case.
           include: ${{ steps.changed-files.outputs.all_changed_files }}
+          use-standalone-tool: true
 
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    env:
+      FILTERED_SOLUTION: ${{ inputs.path != '' && format('{0}/Tests.slnf', inputs.path) || 'Tests.slnf' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v3
         with:
           # Required by NBGV
           fetch-depth: 0
@@ -75,52 +89,55 @@ jobs:
         id: find
         uses: flobernd/actions/dotnet/find-solution@master
         with:
-          directory: ${{ inputs.directory }}
+          directory: ${{ inputs.path }}
 
       - name: Filter Solution
         uses: flobernd/actions/dotnet/filter-solution@master
         with:
           solution: ${{ steps.find.outputs.solution }}
-          pattern: |
-            **/*.Test*.csproj
-          output: ./Tests.slnf
-        # TODO: This step should honor the directory input for outputting the Solution Filter
+          # This pattern is relative to the solution file and does not need to be prefixed with
+          # the 'directory' input value
+          pattern: '**/*.Test*.csproj'
+          output: ${{ env.FILTERED_SOLUTION }}
 
       - name: .NET Setup
-        uses: flobernd/actions/dotnet/setup@master
+        uses: zyactions/dotnet-setup@v1
         with:
-          # Use version defined in 'global.json'
-          dotnet-version: ''
-          disable-problem-matcher: true
+          global-json-file: ${{ env.DOTNET_GLOBAL_JSON }}
+          problem-matcher: false
+
+      - name: .NET Cache Packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles(env.RESTORE_PATTERN) }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: .NET Restore
-        uses: flobernd/actions/dotnet/restore@master
+        uses: zyactions/dotnet-restore@v1
         with:
-          workspace: ./Tests.slnf
-          cache-key: ${{ hashFiles('**/packages.lock.json') }}
-        # TODO: This step should honor the directory input for hashing
+          workspace: ${{ env.FILTERED_SOLUTION }}
 
       - name: .NET Build
         uses: flobernd/actions/dotnet/build@master
         with:
-          workspace: ./Tests.slnf
+          workspace: ${{ env.FILTERED_SOLUTION }}
           configuration: ${{ env.BUILD_CONFIG }}
 
       - name: .NET Test
         uses: flobernd/actions/dotnet/test@master
         with:
-          projects: '**/*.Test*.csproj'
+          projects: ${{ env.TESTS_PATTERN }}
           fail-on-error: false
           log-results: true
           collect-coverage: false
           maxdop: 4
-        # TODO: This step should honor the directory input for test discovery
 
       - name: Generate Test Report
         uses: zyactions/test-reporter@main
         with:
           name: Test Results
-          path: '**/TestResults/*.trx'
+          path: ${{ inputs.path != '' && format('{0}/**/TestResults/*.trx', inputs.path) || '**/TestResults/*.trx' }}
           reporter: dotnet-trx
           fail-on-error: true
           only-summary: false
@@ -131,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v3
         with:
           # Required by NBGV and SonarCloud scanner
           fetch-depth: 0
@@ -140,21 +157,25 @@ jobs:
         id: find
         uses: flobernd/actions/dotnet/find-solution@master
         with:
-          directory: ${{ inputs.directory }}
+          directory: ${{ inputs.path }}
 
       - name: .NET Setup
-        uses: flobernd/actions/dotnet/setup@master
+        uses: zyactions/dotnet-setup@v1
         with:
-          # Use version defined in 'global.json'
-          dotnet-version: ''
-          disable-problem-matcher: false
+          global-json-file: ${{ env.DOTNET_GLOBAL_JSON }}
+          problem-matcher: true
+
+      - name: .NET Cache Packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles(env.RESTORE_PATTERN) }}
+          restore-keys: ${{ runner.os }}-nuget-
 
       - name: .NET Restore
-        uses: flobernd/actions/dotnet/restore@master
+        uses: zyactions/dotnet-restore@v1
         with:
           workspace: ${{ steps.find.outputs.solution }}
-          cache-key: ${{ hashFiles('**/packages.lock.json') }}
-        # TODO: This step should honor the directory input for hashing
 
       - name: SonarCloud Names
         id: sonarcloud-names
@@ -185,11 +206,10 @@ jobs:
       - name: .NET Test
         uses: flobernd/actions/dotnet/test@master
         with:
-          projects: '**/*.Test*.csproj'
+          projects: ${{ env.TESTS_PATTERN }}
           log-results: true
           collect-coverage: true
           maxdop: 4
-        # TODO: This step should honor the directory input for test discovery
 
       - name: SonarCloud End
         uses: flobernd/actions/sonarcloud/end@master
